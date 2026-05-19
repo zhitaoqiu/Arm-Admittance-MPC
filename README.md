@@ -19,7 +19,13 @@
 ├── main_admittance_visual.py              # 6. 导纳控制 + 三色点可视化
 ├── main_mpc_joint_tracking.py             # 7. 关节空间 MPC
 ├── main_mpc_task_space_tracking.py        # 8. 末端空间 MPC
-└── main_admittance_mpc_control.py         # 9. 导纳 + MPC（导纳外环, MPC 内环）
+├── main_admittance_mpc_control.py         # 9. 导纳 + MPC（SciPy L-BFGS-B）
+├── main_admittance_mpc_osqp_control.py    # 10. 导纳 + OSQP-MPC (QP 求解)
+├── main_compare_mpc.py                    # 11. SciPy vs OSQP 对比实验
+├── requirements.txt                       # Python 依赖
+├── docs/
+│   └── OSQP_MPC_UPDATE.md                 # OSQP MPC 详细文档
+└── results/                               # 求解统计 CSV 输出目录
 ```
 
 ---
@@ -238,6 +244,30 @@ flowchart TB
 | 动态性能 | 依赖调参 | 预测优化，更优 |
 | 计算量 | 低 | 中等 |
 
+### 8. 导纳 + OSQP-MPC — [main_admittance_mpc_osqp_control.py](main_admittance_mpc_osqp_control.py)
+
+将内环 MPC 从 SciPy L-BFGS-B 通用优化替换为结构化 QP 求解器 OSQP，大幅提升求解速度和可预测性。
+
+```mermaid
+flowchart LR
+    SciPy["SciPy L-BFGS-B<br/>~50-200ms<br/>不可控迭代次数"] -->|升级| OSQP["OSQP QP<br/><5ms 预期<br/>结构化 QP 一次求解"]
+```
+
+核心变化：
+- **线性化 FK**：用 $J(q_0)$ 将末端误差映射为 $q$ 的二次型，使代价函数严格为 QP
+- **稀疏 QP 构造**：构建 $P, q, A_{\text{cons}}, l, u$ 直接用 OSQP 求解
+- **显式约束**：力矩/关节角/关节速度限位直接编码在 QP 约束中
+- **Δu 平滑**：新增力矩变化率惩罚项
+- **求解统计**：记录每次求解时间、状态、迭代次数，输出 CSV
+
+运行对比：
+```bash
+python main_admittance_mpc_osqp_control.py   # OSQP 版本
+python main_compare_mpc.py                   # SciPy vs OSQP 对比
+```
+
+详见 [docs/OSQP_MPC_UPDATE.md](docs/OSQP_MPC_UPDATE.md)。
+
 ---
 
 ## 控制方法对比
@@ -251,6 +281,7 @@ flowchart TB
 | 关节 MPC | `main_mpc_joint_tracking.py` | 关节空间 | 预测优化，约束力矩 |
 | 末端 MPC | `main_mpc_task_space_tracking.py` | 末端空间 | Cartesian 代价 + 预测优化 |
 | **导纳+MPC** | `main_admittance_mpc_control.py` | 末端空间 | **导纳外环 + MPC 内环** |
+| **导纳+OSQP-MPC** | `main_admittance_mpc_osqp_control.py` | 末端空间 | **QP 结构化求解，实时可部署** |
 
 ---
 
@@ -261,7 +292,7 @@ flowchart TB
 ```bash
 conda create -n robot_lab python=3.10
 conda activate robot_lab
-pip install mujoco numpy scipy matplotlib
+pip install mujoco numpy scipy matplotlib osqp
 ```
 
 ### 运行
@@ -282,7 +313,11 @@ python main_mpc_joint_tracking.py       # 关节空间 MPC
 python main_mpc_task_space_tracking.py  # 末端空间 MPC
 
 # 终极组合
-python main_admittance_mpc_control.py   # 导纳 + MPC
+python main_admittance_mpc_control.py       # 导纳 + MPC (SciPy)
+python main_admittance_mpc_osqp_control.py  # 导纳 + OSQP-MPC
+
+# 对比实验
+python main_compare_mpc.py                  # SciPy vs OSQP 对比
 ```
 
 每个脚本运行后会自动打开 MuJoCo viewer，仿真结束后弹出 matplotlib 绘图窗口。
