@@ -15,33 +15,19 @@ A progressive implementation of compliant motion controllers and Model Predictiv
 
 ---
 
-## Control Architecture
+## Result Plots
 
-```
- External Force F_ext
-        │
-        ▼
- ┌──────────────────┐
- │ Admittance Model  │   M·ẍ + D·ẋ + K·(x - x₀) = F_ext
- │  (outer loop)     │
- └────────┬─────────┘
-          │  x_ref(t), ẋ_ref(t)
-          ▼
- ┌──────────────────┐
- │  OSQP-QP MPC      │   min  Σ ||xₖ - x_ref||²_Q + ||uₖ||²_R + ||Δuₖ||²_S
- │  (inner loop)     │   s.t.  sₖ₊₁ = A_d sₖ + B_d uₖ + c_d
- │                   │         τ_min ≤ uₖ ≤ τ_max
- │  Horizon N=12     │         q_min ≤ qₖ ≤ q_max
- │  dt = 0.03 s      │         dq_min ≤ dqₖ ≤ dq_max
- └────────┬─────────┘
-          │  τ_cmd
-          ▼
- ┌──────────────────┐
- │  MuJoCo           │
- │  2-DOF Arm        │   L₁=0.5m, L₂=0.4m
- │  Simulation       │   dt = 0.002 s
- └──────────────────┘
-```
+**Solve Time Comparison** — OSQP solves consistently in ~0.2 ms vs SciPy's ~100 ms, with dramatically lower variance:
+
+![Solve Time Comparison](results/solve_time_comparison.png)
+
+**Tracking Error Comparison** — Both controllers produce nearly identical end-effector trajectories, confirming zero accuracy loss:
+
+![Tracking Error Comparison](results/tracking_error_comparison.png)
+
+**Torque Comparison** — Both respect the ±20 N·m bounds; OSQP produces slightly smoother torque profiles:
+
+![Torque Comparison](results/torque_comparison.png)
 
 ---
 
@@ -134,20 +120,6 @@ $$\min_z \frac{1}{2} z^T P z + q^T z \quad \text{s.t.} \quad l \leq A_{cons} z \
 | 10s simulation wall time [s] | 52.6 | 9.7 |
 
 **Conclusion**: The OSQP-QP controller achieves nearly identical tracking accuracy compared with the SciPy baseline, while reducing the average MPC solve time by approximately **520×** (104.8 ms → 0.20 ms) and the max solve time by approximately **1000×** (573 ms → 0.54 ms).
-
-### Result Plots
-
-**Solve Time Comparison** — OSQP solves consistently in ~0.2 ms vs SciPy's ~100 ms, with dramatically lower variance:
-
-![Solve Time Comparison](results/solve_time_comparison.png)
-
-**Tracking Error Comparison** — Both controllers produce nearly identical end-effector trajectories, confirming zero accuracy loss:
-
-![Tracking Error Comparison](results/tracking_error_comparison.png)
-
-**Torque Comparison** — Both respect the ±20 N·m bounds; OSQP produces slightly smoother torque profiles:
-
-![Torque Comparison](results/torque_comparison.png)
 
 ---
 
